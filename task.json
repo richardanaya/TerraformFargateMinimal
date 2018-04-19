@@ -1,0 +1,14 @@
+[
+  {
+    "name": "helloworld",
+    "image": "strm/helloworld-http",
+    "portMappings": [
+      {
+        "containerPort": 80,
+        "hostPort": 80
+      }
+    ],
+    "memory": 300,
+    "networkMode": "awsvpc"
+  }
+]
