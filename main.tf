@@ -3,16 +3,15 @@ provider "aws" {
   region     = "us-east-1"
 }
 
-
 # Let's create a network for our containers to run in
-resource "aws_vpc" "main" {
+resource "aws_vpc" "vpc" {
   cidr_block = "10.0.0.0/16"
   enable_dns_support = true
   enable_dns_hostnames = true
 }
 
 resource "aws_subnet" "main" {
-  vpc_id     = "${aws_vpc.main.id}"
+  vpc_id     = "${aws_vpc.vpc.id}"
   cidr_block = "10.0.1.0/24"
   # this is what allows us to talk to outside world
   map_public_ip_on_launch = true
@@ -20,7 +19,7 @@ resource "aws_subnet" "main" {
 
 # Only allow in on 80 but allow out on all
 resource "aws_default_security_group" "default" {
-  vpc_id = "${aws_vpc.main.id}"
+  vpc_id = "${aws_vpc.vpc.id}"
 
   # expose HTTP
   ingress {
@@ -41,11 +40,11 @@ resource "aws_default_security_group" "default" {
 
 # This lets out network talk with outside world
 resource "aws_internet_gateway" "gw" {
-  vpc_id = "${aws_vpc.main.id}"
+  vpc_id = "${aws_vpc.vpc.id}"
 }
 
 resource "aws_route" "internet_access" {
-  route_table_id         = "${aws_vpc.main.main_route_table_id}"
+  route_table_id         = "${aws_vpc.vpc.main_route_table_id}"
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = "${aws_internet_gateway.gw.id}"
 }
