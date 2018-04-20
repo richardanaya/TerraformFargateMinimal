@@ -58,7 +58,12 @@ resource "aws_ecs_cluster" "halcyon" {
 resource "aws_iam_role" "ecs_execution_role" {
   name = "ecs_execution_role"
 
-  assume_role_policy = "${file("ecs_execution_policy.json")}"
+  assume_role_policy = "${file("ecs_execution_assume_role_policy.json")}"
+}
+
+resource "aws_iam_role_policy" "ecs_execution_role_policy" {
+  role = "${aws_iam_role.ecs_execution_role.id}"
+  policy = "${file("ecs_execution_policy.json")}"
 }
 
 # Let's create a task to run on Fargate
