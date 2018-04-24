@@ -10,9 +10,18 @@ resource "aws_vpc" "vpc" {
   enable_dns_hostnames = true
 }
 
-resource "aws_subnet" "main" {
+resource "aws_subnet" "a" {
   vpc_id     = "${aws_vpc.vpc.id}"
-  cidr_block = "10.0.1.0/24"
+  cidr_block = "10.0.10.0/24"
+  availability_zone = "us-east-1a"
+  # this is what allows us to talk to outside world
+  map_public_ip_on_launch = true
+}
+
+resource "aws_subnet" "b" {
+  vpc_id     = "${aws_vpc.vpc.id}"
+  cidr_block = "10.0.20.0/24"
+  availability_zone = "us-east-1b"
   # this is what allows us to talk to outside world
   map_public_ip_on_launch = true
 }
@@ -78,6 +87,35 @@ resource "aws_ecs_task_definition" "helloworld" {
   task_role_arn            = "${aws_iam_role.ecs_execution_role.arn}"
 }
 
+resource "aws_alb" "alb_web" {
+  name            = "testweb"
+  security_groups = ["${aws_default_security_group.default.id}"]
+  subnets         = ["${aws_subnet.a.id}","${aws_subnet.b.id}"]
+}
+
+resource "aws_lb_target_group" "web" {
+  name     = "web"
+  target_type = "ip"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = "${aws_vpc.vpc.id}"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_alb_listener" "openjobs" {
+  load_balancer_arn = "${aws_alb.alb_web.arn}"
+  port              = "80"
+  protocol          = "HTTP"
+  depends_on        = ["aws_lb_target_group.web"]
+
+  default_action {
+    target_group_arn = "${aws_lb_target_group.web.arn}"
+    type             = "forward"
+  }
+}
+
 resource "aws_ecs_service" "helloworld" {
   name            = "helloworld-service"
   task_definition = "${aws_ecs_task_definition.helloworld.family}:${aws_ecs_task_definition.helloworld.revision}"
@@ -85,11 +123,34 @@ resource "aws_ecs_service" "helloworld" {
   launch_type     = "FARGATE"
   cluster =       "${aws_ecs_cluster.halcyon.id}"
 
+  load_balancer {
+    target_group_arn = "${aws_lb_target_group.web.arn}"
+    container_name   = "helloworld"
+    container_port   = 80
+  }
+
   network_configuration {
     # This control networking aspects of the scheduler
     security_groups = ["${aws_default_security_group.default.id}"]
-    subnets         = ["${aws_subnet.main.id}"]
+    subnets         = ["${aws_subnet.a.id}","${aws_subnet.b.id}"]
     # You won't be able to pull from docker.io if you turn this off
     assign_public_ip = "true"
+  }
+}
+
+
+resource "aws_route53_zone" "primary_route" {
+  name              = "yourdomaingoeshere.com"
+}
+
+resource "aws_route53_record" "www-prod" {
+  zone_id = "${aws_route53_zone.primary_route.id}"
+  name    = "www.yourdomaingoeshere.com"
+  type    = "A"
+
+  alias {
+    name                    = "${aws_alb.alb_web.dns_name}"
+    zone_id                 = "${aws_alb.alb_web.zone_id}"
+    evaluate_target_health  = true
   }
 }
